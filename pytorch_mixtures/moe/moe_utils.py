@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import *
 
 
 class RMSNorm(nn.Module):
@@ -23,6 +24,24 @@ class GEGLU(nn.Module):
     def forward(self, x):
         x, gate = x.chunk(2, dim=-1)
         return F.gelu(gate) * x * self.mult_bias
+
+
+class Experts(nn.Module):
+    def __init__(self, num_experts: int, experts: List[nn.Module]) -> None:
+        super().__init__()
+        self.num_experts = num_experts
+        self.experts = nn.ModuleList(experts)
+    
+    def forward(self, x):
+        # shape of x: [E, B, N, D]
+        [E, B, N, D] = x.shape
+        outputs = []
+
+        for i in range(self.num_exerts):
+            per_expert_output = self.experts[i](x)
+            outputs.append(per_expert_output)
+
+        return torch.stack(outputs).view(E, B, N, D)
 
 
 def load_balancing_loss(router_probs, expert_indices):
