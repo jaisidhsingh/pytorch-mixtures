@@ -1,4 +1,4 @@
-# Reference: Lucidrain ST-MoE Github
+# Reference: Lucidrains ST-MoE Github, Google Flaxformer GitHub
 
 import torch
 import torch.nn as nn
@@ -33,15 +33,17 @@ class Experts(nn.Module):
         self.experts = nn.ModuleList(experts)
     
     def forward(self, x):
-        # shape of x: [E, B, N, D]
-        [E, B, N, D] = x.shape
+        # shape of x: [B, E, N, D]
+        [B, E, N, D] = x.shape
+        x = x.view(E, B, N, D)
         outputs = []
 
         for i in range(self.num_exerts):
-            per_expert_output = self.experts[i](x)
-            outputs.append(per_expert_output)
+            per_expert_output = self.experts[i](x[i])
+            outputs.append(per_expert_output.unsqueeze(0))
 
-        return torch.stack(outputs).view(E, B, N, D)
+        outputs = torch.stack(outputs).view(E, B, N, D)
+        return outputs.view(B, E, N, D)
 
 
 def load_balancing_loss(router_probs, expert_indices):
