@@ -5,8 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 from typing import *
-
-from pytorch_mixtures.moe.moe_utils import load_balancing_loss, router_z_loss
+from pytorch_mixtures.utils import load_balancing_loss, router_z_loss, _one_hot
 
 
 class RouterOutput():
@@ -20,13 +19,13 @@ class RouterOutput():
 class RouterWeights(nn.Module):
     def __init__(self, dim: int, num_experts: int) -> None:
         super().__init__()
-        self.w_gate = nn.Parameter(torch.empty(dim, num_experts))
+        self.w_gate = nn.Parameter(torch.randn(dim, num_experts))
 
     def forward(self, x: Tensor) -> Tensor:
         return torch.einsum("bnd,de->bne", x, self.w_gate)
 
 
-class Router(nn.Modulde):
+class Router(nn.Module):
     def __init__(self, dim: int, num_experts: int) -> None:
         super().__init__()
         self.weights = RouterWeights(dim, num_experts)
@@ -34,8 +33,8 @@ class Router(nn.Modulde):
     def forward(self, token_inputs: Tensor, expert_capacity: int) -> Tensor:
         router_logits = self.weights(token_inputs)
         z_loss = router_z_loss(router_logits)
-
         router_probs = F.softmax(router_logits, dim=-1)
+
         routing_instructions = self.compute_routing_instructions(router_probs, expert_capacity)
         routing_instructions.update({"router_z_loss": z_loss})
 
@@ -49,12 +48,11 @@ class ExpertChoiceRouter(Router):
         transposed_router_probs = torch.permute(router_probs, (0, 2, 1))
         # shape = [B, E, C]
         expert_gate, expert_index = torch.topk(transposed_router_probs, k=expert_capacity, dim=-1)
-
         # make the dispatch tensor
         # shape = [B, E, C, N]
-        dispatch_tensor = F.one_hot(expert_index, N)
+        dispatch_tensor = _one_hot(expert_index, N)
         # shape = [B, N, E, C]
-        dispatch_tensor = torch.permute(dispatch_tensor, (0, 3, 1, 2))
+        dispatch_tensor = torch.permute(dispatch_tensor, (0, 3, 1, 2)).to(torch.float32)
 
         # make the combine tensor
         # shape = [B, N, E, C]
@@ -62,16 +60,21 @@ class ExpertChoiceRouter(Router):
 			"bec,bnec->bnec",
 			expert_gate,
 			dispatch_tensor
-		)
+		).to(torch.float32)
+        
         aux_loss = torch.tensor(0.0).to(router_probs.device)
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
 
 
 class TopkRouter(Router):
-    def __init__(self, topk: int):
+    def __init__(self, dim: int, num_experts: int, topk: int):
+        # self.dim = dim
+        # self.num_experts = num_experts
+        super().__init__(dim, num_experts)
         self.topk = topk
 
-    def compute_routing_instructions(self, router_probs: Tensor, expert_capacity: int) -> dict:
+    def compute_routing_instructions(self, router_logits: Tensor, expert_capacity: int) -> dict:
+        router_probs = F.softmax(router_logits, dim=-1)
         [B, N, E] = router_probs.shape
         gate_weights, gate_indices = router_probs.topk(k=self.topk, dim=-1)
 
@@ -81,7 +84,7 @@ class TopkRouter(Router):
         gate_indices_reshaped = gate_indices.view(self.topk, B, N)
 
         # start making masks
-        one_hot_indices = F.one_hot(gate_indices_reshaped, E)
+        one_hot_indices = _one_hot(gate_indices_reshaped, E)
         mask = one_hot_indices.float()
 
         # normalize topk expert weights
@@ -89,9 +92,9 @@ class TopkRouter(Router):
         gate_weights_reshaped = gate_indices_reshaped / denom
 
         preferred_experts = torch.permute(gate_indices, (0, 2, 1))
-        preferred_experts = preferred_experts.view(B, N * self.topk)
+        preferred_experts = preferred_experts.reshape(B, N * self.topk)
 
-        expert_mask = F.one_hot(preferred_experts, E)
+        expert_mask = _one_hot(preferred_experts, E)
         # incorporate token priority into forward pass
         # shape: [B, N * self.topk, E]
         token_priority = torch.cumsum(expert_mask, dim=1) * expert_mask - 1.0
@@ -101,7 +104,7 @@ class TopkRouter(Router):
         # shape: [B, N, self.topk, E]
         token_priority = torch.permute(token_priority, (0, 2, 1, 3))
         # shape: [B, N, self.topk]
-        token_priority = token_priority.max(dim=-1)
+        token_priority, _ = token_priority.max(dim=-1)
 
         # reshape preferred experts to the default shape for this stage
         preferred_experts = preferred_experts.view(B, self.topk, N)
@@ -113,6 +116,7 @@ class TopkRouter(Router):
         # make dispatch tensor
         dispatch_tensor = torch.cat([preferred_experts, token_priority], dim=-1)
 
+        print(dispatch_tensor.shape, combine_tensor.shape)
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
 
 
