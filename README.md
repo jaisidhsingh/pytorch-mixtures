@@ -2,7 +2,7 @@
 
 A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of-Experts</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a> in PyTorch. Your one-stop solution for inserting MoE/MoD layers into custom neural networks effortlessly!
 
-<img src="assets/moe_pic.png" width="350" height="200"> <img src="assets/mod_pic.png" width="150" height="200">
+<img src="assets/moe_pic.png" width="350" height="200"> -- <img src="assets/mod_pic.png" width="150" height="200">
 
 Sources:
 
