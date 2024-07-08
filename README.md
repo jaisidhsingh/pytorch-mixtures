@@ -5,7 +5,10 @@ A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of
 <img src="assets/moe_pic.png" width="350" height="200">
 <img src="assets/mod_pic.png" width="150" height="200">
 
-Sources:<a href="https://arxiv.org/abs/1701.06538">Outrageously Large Neural Networks (Geoffrey Hinton MoE paper, 2017)</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture of Depths</a>
+Sources:
+
+1. <a href="https://arxiv.org/abs/1701.06538">Sparse Mixture of Experts, 2017</a>
+2. <a href="https://arxiv.org/abs/2404.02258">Mixture of Depths, 2024</a>
 
 ## Features/Todo
 
