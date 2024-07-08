@@ -123,3 +123,10 @@ If you found this package useful, please cite it in your work:
   howpublished = {\url{https://github.com/jaisidhsingh/pytorch-mixtures}},
 }
 ```
+
+# References
+
+This package was built with the help of open-source code mentioned below:
+1. <a href="https://github.com/google/flaxformer">Google Flaxformer</a>
+2. <a href="https://github.com/lucidrains/st-moe-pytorch">ST-MoE by Lucidrains</a>
+3. <a href="https://huggingface.co/blog/joey00072/mixture-of-depth-is-vibe">MoD Huggingface blog</a>
