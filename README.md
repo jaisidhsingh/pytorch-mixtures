@@ -2,7 +2,8 @@
 
 A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of-Experts</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a> in PyTorch. Your one-stop solution for inserting MoE/MoD layers into custom neural networks effortlessly!
 
-<img src="assets/moe_pic.png" width="300" height="100"><img src="assets/mod_pic.png" width="200" height="300">
+<img src="assets/moe_pic.png" width="500" height="300">
+<img src="assets/mod_pic.png" width="200" height="300">
 
 Sources:<a href="https://arxiv.org/abs/1701.06538">Outrageously Large Neural Networks (Geoffrey Hinton MoE paper, 2017)</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture of Depths</a>
 
