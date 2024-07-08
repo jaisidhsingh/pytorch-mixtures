@@ -1,4 +1,4 @@
-# PyTorch Mixtures
+# PyTorch Mixtures <a href="https://pypi.org/project/pytorch-mixtures/0.1.0/">[PyPi]</a>
 
 A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of-Experts</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a> in PyTorch. Your one-stop solution for inserting MoE/MoD layers into custom neural networks effortlessly!
 
