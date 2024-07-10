@@ -86,7 +86,7 @@ class CustomMoEAttentionBlock(nn.Module):
     def __init__(self, dim, num_heads, num_experts, capacity_factor, experts):
         super().__init__()
         self.attn = MHSA(dim, num_heads)
-        self.router = ExpertChoiceRouter(dim, num_experts)
+        router = ExpertChoiceRouter(dim, num_experts)
         self.moe = MoELayer(dim, router, experts, capacity_factor)
         
         self.norm1 = nn.LayerNorm(dim)
