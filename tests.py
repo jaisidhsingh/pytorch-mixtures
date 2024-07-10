@@ -93,4 +93,4 @@ def test_expert_choice_mod():
 
 
 if __name__ == "__main__":
-    test_expert_choice_moe_with_identical_routers()
+    test_topk_moe_with_identical_routers()

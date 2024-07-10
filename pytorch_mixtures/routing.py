@@ -73,76 +73,35 @@ class TopkRouter(Router):
         super().__init__(dim, num_experts)
         self.topk = topk
 
-    def compute_routing_instructions(self, router_logits: Tensor, expert_capacity: int) -> dict:
-        router_probs = F.softmax(router_logits, dim=-1)
+    def compute_routing_instructions(self, router_probs: Tensor, expert_capacity: int) -> dict:
         [B, N, E] = router_probs.shape
-        gate_weights, gate_indices = router_probs.topk(k=self.topk, dim=-1)
+        expert_gate, expert_indices = router_probs.topk(k=self.topk, dim=-1)
 
-        aux_loss = load_balancing_loss(router_probs, gate_indices)
+        aux_loss = load_balancing_loss(router_probs, expert_indices)
 
-        gate_weights_reshaped = gate_weights.view(self.topk, B, N)
-        gate_indices_reshaped = gate_indices.view(self.topk, B, N)
+        # shape: [B, self.topk, N]
+        expert_indices = torch.permute(expert_indices, (0, 2, 1))
+        # shape: [B, self.topk * N]
+        expert_indices = expert_indices.view(B, -1)
 
-        # start making masks
-        one_hot_indices = _one_hot(gate_indices_reshaped, E)
-        mask = one_hot_indices.float()
-
-        # normalize topk expert weights
-        denom = gate_weights_reshaped.sum(dim=0).view(1, B, N)
-        gate_weights_reshaped = gate_indices_reshaped / denom
-
-        preferred_experts = torch.permute(gate_indices, (0, 2, 1))
-        preferred_experts = preferred_experts.reshape(B, N * self.topk)
-
-        expert_mask = _one_hot(preferred_experts, E)
-        # incorporate token priority into forward pass
         # shape: [B, N * self.topk, E]
+        expert_mask = _one_hot(expert_indices, E)
+        # shape: [B, self.topk * N, E]
         token_priority = torch.cumsum(expert_mask, dim=1) * expert_mask - 1.0
-
         # shape: [B, self.topk, N, E]
         token_priority = token_priority.view(B, self.topk, N, E)
         # shape: [B, N, self.topk, E]
         token_priority = torch.permute(token_priority, (0, 2, 1, 3))
-        # shape: [B, N, self.topk]
-        token_priority, _ = token_priority.max(dim=-1)
+        # shape: [B, N, E]
+        token_priority, _ = torch.max(token_priority, dim=2)
 
-        # reshape preferred experts to the default shape for this stage
-        preferred_experts = preferred_experts.view(B, self.topk, N)
-        preferred_experts = torch.permute(preferred_experts, (0, 2, 1))
-
-        # make combine tensor
-        combine_tensor = gate_weights
-        combine_tensor *= token_priority < expert_capacity
-        # make dispatch tensor
-        dispatch_tensor = torch.cat([preferred_experts, token_priority], dim=-1)
-
-        print(dispatch_tensor.shape, combine_tensor.shape)
+        # make the dispatch and combine tensors
+        # shape: [B, N, E, expert_capacity]
+        dispatch_tensor = _one_hot(token_priority, expert_capacity)
+        # shape: [B, N, E, expert_capacity]
+        combine_tensor = torch.einsum(
+            "...te,...tec->...tec",
+            router_probs,
+            dispatch_tensor
+        )
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
-
-
-
-        """
-            # Shape: [num_groups, tokens_per_group * num_selected_experts, num_experts].
-    token_priority = jnp.cumsum(expert_mask, axis=1) * expert_mask - 1.0
-    # Shape: [num_groups, num_selected_experts, tokens_per_group, num_experts].
-    token_priority = token_priority.reshape(
-        (num_groups, self.num_selected_experts, -1, num_experts))
-    # Shape: [num_groups, tokens_per_group, num_selected_experts, num_experts].
-    token_priority = jnp.swapaxes(token_priority, 1, 2)
-    # For each token, across all experts, select the only non-negative
-    # (unmasked) priority. Shape: [num_groups, tokens_per_group,
-    # num_selected_experts].
-    token_priority = jnp.max(token_priority, axis=-1)
-
-    # Return to original index shape.
-    preferred_experts = preferred_experts.reshape(num_groups,
-                                                  self.num_selected_experts,
-                                                  tokens_per_group)
-    # Shape: [num_groups, tokens_per_group, num_selected_experts]
-    preferred_experts = jnp.swapaxes(preferred_experts, 1, 2)
-        """
-
-# Note: Need to integrate all routings into the MoELayer Module
-# and need to test it using "the same N experts" strategy.
-# For this, work out the mathematics for Expert Choice routing, for
-# you already know this works for TopkRouting.
