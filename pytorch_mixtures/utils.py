@@ -1,28 +1,31 @@
-# Reference: Lucidrains ST-MoE Github, Google Flaxformer GitHub
+# References: 
+# 1. Lucidrains ST-MoE Github: https://github.com/lucidrains/st-moe-pytorch
+# 2. Google Flaxformer GitHub: https://github.com/google/flaxformer
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 from typing import *
 from einops import rearrange
 
 
 class RMSNorm(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim: int) -> None:
         super().__init__()
         self.scale = dim ** 0.5
         self.gamma = nn.Parameter(torch.ones(dim))
     
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return F.normalize(x, dim=-1) * self.gamma * self.scale
     
 
 class GEGLU(nn.Module):
-    def __init__(self, dim, mult_bias=True):
+    def __init__(self, dim: int, mult_bias: bool = True) -> None:
         super().__init__()
         self.mult_bias = nn.Parameter(torch.ones(dim)) if mult_bias else 1
     
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x, gate = x.chunk(2, dim=-1)
         return F.gelu(gate) * x * self.mult_bias
 
@@ -33,7 +36,7 @@ class Experts(nn.Module):
         self.num_experts = num_experts
         self.experts = nn.ModuleList(experts)
     
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         [B, E, N, D] = x.shape
         x = torch.permute(x, (1, 0, 2, 3))
         outputs = []
@@ -47,7 +50,7 @@ class Experts(nn.Module):
 
 
 class MHSA(nn.Module):
-    def __init__(self, dim, num_heads, scaling=True, dropout=0.0):
+    def __init__(self, dim: int, num_heads: int, scaling: bool = True, dropout: float = 0.0) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.embedding_dim = dim
@@ -57,7 +60,7 @@ class MHSA(nn.Module):
         self.queries_keys_values = nn.Linear(dim, 3*dim)
         self.projection = nn.Linear(dim, dim)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         splits = rearrange(self.queries_keys_values(
             x), 'b n (h d qkv) -> (qkv) b h n d', qkv=3, h=self.num_heads)
         queries, keys, values = splits[0], splits[1], splits[2]
@@ -75,7 +78,7 @@ class MHSA(nn.Module):
 
 
 
-def load_balancing_loss(router_probs, expert_indices):
+def load_balancing_loss(router_probs: Tensor, expert_indices: Tensor) -> Tensor:
     [B, N, E] = router_probs.shape
     expert_mask = F.one_hot(expert_indices, E)
     expert_mask, _ = expert_mask.max(dim=-2)
@@ -87,14 +90,14 @@ def load_balancing_loss(router_probs, expert_indices):
     return loss
 
 
-def router_z_loss(router_logits):
+def router_z_loss(router_logits: Tensor) -> Tensor:
     [B, N, E] = router_logits.shape
     log_z = torch.logsumexp(router_logits, dim=-1)
     loss = log_z**2
     return loss.sum().float() / (B * N) 
 
 
-def _one_hot(indices, num_classes, dtype=torch.int32):
+def _one_hot(indices: Tensor, num_classes: int, dtype=torch.int32) -> Tensor:
     """
     Augments the default `torch.nn.functional.one_hot` as follows:
     1. ignores negative elements in the input `indices`

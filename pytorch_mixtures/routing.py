@@ -1,4 +1,5 @@
-# Reference: Google Flaxformer GitHub
+# Reference:
+# 1. Google Flaxformer GitHub: https://github.com/google/flaxformer
 
 import torch
 import torch.nn as nn
@@ -30,7 +31,7 @@ class Router(nn.Module):
         super().__init__()
         self.weights = RouterWeights(dim, num_experts)
 
-    def forward(self, token_inputs: Tensor, expert_capacity: int) -> Tensor:
+    def forward(self, token_inputs: Tensor, expert_capacity: int) -> RouterOutput:
         router_logits = self.weights(token_inputs)
         z_loss = router_z_loss(router_logits)
         router_probs = F.softmax(router_logits, dim=-1)
@@ -67,7 +68,7 @@ class ExpertChoiceRouter(Router):
 
 
 class TopkRouter(Router):
-    def __init__(self, dim: int, num_experts: int, topk: int):
+    def __init__(self, dim: int, num_experts: int, topk: int) -> None:
         # self.dim = dim
         # self.num_experts = num_experts
         super().__init__(dim, num_experts)
@@ -82,10 +83,10 @@ class TopkRouter(Router):
         # shape: [B, self.topk, N]
         expert_indices = torch.permute(expert_indices, (0, 2, 1))
         # shape: [B, self.topk * N]
-        expert_indices = expert_indices.view(B, -1)
+        expert_indices = expert_indices.reshape(B, self.topk * N)
 
         # shape: [B, N * self.topk, E]
-        expert_mask = _one_hot(expert_indices, E)
+        expert_mask = _one_hot(expert_indices, E).to(torch.int32)
         # shape: [B, self.topk * N, E]
         token_priority = torch.cumsum(expert_mask, dim=1) * expert_mask - 1.0
         # shape: [B, self.topk, N, E]
@@ -94,10 +95,11 @@ class TopkRouter(Router):
         token_priority = torch.permute(token_priority, (0, 2, 1, 3))
         # shape: [B, N, E]
         token_priority, _ = torch.max(token_priority, dim=2)
+        token_priority = token_priority.long()
 
         # make the dispatch and combine tensors
         # shape: [B, N, E, expert_capacity]
-        dispatch_tensor = _one_hot(token_priority, expert_capacity)
+        dispatch_tensor = _one_hot(token_priority, expert_capacity).float()
         # shape: [B, N, E, expert_capacity]
         combine_tensor = torch.einsum(
             "...te,...tec->...tec",
