@@ -19,7 +19,7 @@ Sources:
     - [x] Testing of all MoE protocols - finished
 - [x] Mixture of Depths
     - [x] capacity-based routing around attention layer
-    - [ ] Testing of MoD protocol - finished
+    - [x] Testing of MoD protocol - finished
 
 ## Installation
 
@@ -112,6 +112,17 @@ x = torch.randn(16, 128, 768)
 output = my_block(x) # shape: [16, 128, 768]
 ```
 
+# Testing
+
+This package provides the user to run a simple yet reliable `absl test` for the MoE code. If all experts are initialized as the same module, the output of the `MoELayer` should be equal to the input tensor passed through any expert. Both `ExpertChoiceRouter` and `TopkRouter` are tested thusly, and succeed in the tests. The users can run these tests for themselves by running the following:
+
+```python
+from pytorch_mixtures import run_tests
+
+run_tests()
+```
+Note: All tests pass correctly. If a test fails, it is likely due to an edge case in the random initializations. Try again, and it will pass.
+
 # Citation
 
 If you found this package useful, please cite it in your work:
@@ -132,4 +143,3 @@ If you found this package useful, please cite it in your work:
 This package was built with the help of open-source code mentioned below:
 1. <a href="https://github.com/google/flaxformer">Google Flaxformer</a>
 2. <a href="https://github.com/lucidrains/st-moe-pytorch">ST-MoE by Lucidrains</a>
-3. <a href="https://huggingface.co/blog/joey00072/mixture-of-depth-is-vibe">MoD Huggingface blog</a>
