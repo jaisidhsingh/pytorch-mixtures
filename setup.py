@@ -7,7 +7,7 @@ def parse_requirements(filename):
 
 setuptools.setup(
     name="pytorch-mixtures",
-    version="0.1.0",
+    version="0.1.1",
     author="Jaisidh Singh",
     author_email="jaisidhsingh@gmail.com",
     description="The one-stop solution to easily integrate MoE & MoD layers into custom PyTorch code.",
