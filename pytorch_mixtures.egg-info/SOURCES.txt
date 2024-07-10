@@ -1,0 +1,15 @@
+LICENSE
+MANIFEST.in
+README.md
+requirements.txt
+setup.py
+pytorch_mixtures/__init__.py
+pytorch_mixtures/mod_layer.py
+pytorch_mixtures/moe_layer.py
+pytorch_mixtures/routing.py
+pytorch_mixtures/utils.py
+pytorch_mixtures.egg-info/PKG-INFO
+pytorch_mixtures.egg-info/SOURCES.txt
+pytorch_mixtures.egg-info/dependency_links.txt
+pytorch_mixtures.egg-info/requires.txt
+pytorch_mixtures.egg-info/top_level.txt
