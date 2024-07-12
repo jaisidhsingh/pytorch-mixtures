@@ -66,10 +66,10 @@ moe = MoELayer(
 )
 
 # initialize some test input
-x = torch.randn(B, N, D)
+x = torch.randn(BATCH_SIZE, SEQ_LEN, DIM)
 
 # pass through moe
-moe_output = moe(x) # shape: [B, N, D]
+moe_output = moe(x) # shape: [BATCH_SIZE, SEQ_LEN, DIM]
 ```
 
 You can also use this easily within your own `nn.Module` classes
