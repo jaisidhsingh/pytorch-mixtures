@@ -19,10 +19,18 @@ class MoELayer(nn.Module):
         # send tokens to router
         routing_instructions = self.router(token_inputs, expert_capacity)
         # dispatch to experts
-        expert_inputs = torch.einsum("bnd,bnec->becd", token_inputs, routing_instructions.dispatch_tensor)
+        expert_inputs = torch.einsum(
+            "bnd,bnec->becd", 
+            token_inputs, 
+            routing_instructions["dispatch_tensor"]
+        )
         # processing by experts
         expert_outputs = self.experts(expert_inputs)
         # combine expert outputs
-        output = torch.einsum("becd,bnec->bnd", expert_outputs, routing_instructions.combine_tensor)
-        return output
+        output = torch.einsum(
+            "becd,bnec->bnd", 
+            expert_outputs, 
+            routing_instructions["combine_tensor"]
+        )
+        return output, routing_instructions["aux_loss"], routing_instructions["router_z_loss"]
  

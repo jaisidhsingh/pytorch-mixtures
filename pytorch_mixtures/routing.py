@@ -9,14 +9,6 @@ from typing import *
 from pytorch_mixtures.utils import load_balancing_loss, router_z_loss, _one_hot
 
 
-class RouterOutput():
-    def __init__(self, dispatch_tensor: Tensor, combine_tensor: Tensor, aux_loss: Tensor, router_z_loss: Tensor) -> None:
-        self.dispatch_tensor = dispatch_tensor
-        self.combine_tensor = combine_tensor
-        self.aux_loss = aux_loss
-        self.router_z_loss = router_z_loss
-
-
 class RouterWeights(nn.Module):
     def __init__(self, dim: int, num_experts: int) -> None:
         super().__init__()
@@ -31,15 +23,14 @@ class Router(nn.Module):
         super().__init__()
         self.weights = RouterWeights(dim, num_experts)
 
-    def forward(self, token_inputs: Tensor, expert_capacity: int) -> RouterOutput:
+    def forward(self, token_inputs: Tensor, expert_capacity: int) -> dict:
         router_logits = self.weights(token_inputs)
         z_loss = router_z_loss(router_logits)
         router_probs = F.softmax(router_logits, dim=-1)
 
         routing_instructions = self.compute_routing_instructions(router_probs, expert_capacity)
         routing_instructions.update({"router_z_loss": z_loss})
-
-        return RouterOutput(**routing_instructions)
+        return routing_instructions
 
 
 class ExpertChoiceRouter(Router):

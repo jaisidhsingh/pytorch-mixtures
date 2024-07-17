@@ -47,7 +47,8 @@ class PyTorchMixturesTests(parameterized.TestCase):
             many_experts[i].load_state_dict(reference_expert.state_dict())
         
         router = ExpertChoiceRouter(dim=64, num_experts=E)
-        moe = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
+        # aux_loss is 0 for Expert Choice Routers
+        moe, aux_loss, router_z_loss = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
         y = moe(x)
         z = reference_expert(x)
 
@@ -82,7 +83,7 @@ class PyTorchMixturesTests(parameterized.TestCase):
             many_experts[i].load_state_dict(reference_expert.state_dict())
         
         router = TopkRouter(dim=64, num_experts=E, topk=K)
-        moe = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
+        moe, aux_loss, router_z_loss = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
         y = moe(x)
         z = reference_expert(x)
 
@@ -110,7 +111,7 @@ class PyTorchMixturesTests(parameterized.TestCase):
         
         router = ExpertChoiceRouter(dim=D, num_experts=1)
         attn_fn = MHSA(dim=D, num_heads=E)
-        mod = MoDLayer(router=router, attn_fn=attn_fn, capacity_factor=C)
+        mod, router_z_loss = MoDLayer(router=router, attn_fn=attn_fn, capacity_factor=C)
         y = mod(x)
 
         print(" ")
