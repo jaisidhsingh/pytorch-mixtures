@@ -69,7 +69,7 @@ moe = MoELayer(
 x = torch.randn(BATCH_SIZE, SEQ_LEN, DIM)
 
 # pass through moe
-moe_output = moe(x) # shape: [BATCH_SIZE, SEQ_LEN, DIM]
+moe_output, aux_loss, router_z_loss = moe(x) # shape: [BATCH_SIZE, SEQ_LEN, DIM]
 ```
 
 You can also use this easily within your own `nn.Module` classes
@@ -94,8 +94,9 @@ class CustomMoEAttentionBlock(nn.Module):
     
     def forward(self, x):
         x = self.norm1(self.attn(x) + x)
-        x = self.norm2(self.moe(x) + x)
-        return x
+        moe_output, aux_loss, router_z_loss = self.moe(x)
+        x = self.norm2(moe_output + x)
+        return x, aux_loss, router_z_loss
 
 
 experts = [nn.Linear(768, 768) for _ in range(8)]
@@ -109,7 +110,7 @@ my_block = CustomMoEAttentionBlock(
 
 # some test input
 x = torch.randn(16, 128, 768)
-output = my_block(x) # shape: [16, 128, 768]
+output, aux_loss, router_z_loss = my_block(x) # output shape: [16, 128, 768]
 ```
 
 # Testing
