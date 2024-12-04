@@ -60,8 +60,6 @@ class ExpertChoiceRouter(Router):
 
 class TopkRouter(Router):
     def __init__(self, dim: int, num_experts: int, topk: int) -> None:
-        # self.dim = dim
-        # self.num_experts = num_experts
         super().__init__(dim, num_experts)
         self.topk = topk
 
@@ -98,3 +96,38 @@ class TopkRouter(Router):
             dispatch_tensor
         )
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
+
+
+class SoftRouter(nn.Module):
+    """
+    MoE for this will have its forward function as:
+    (MoELayer already handles this)
+    -----------------------------------------------
+    routing_instructions = self.router(x)
+    expert_inputs = torch.einsum(
+        "bnd,bnes->besd",
+        x,
+        routing_instructions["dispatch_tensor"]
+    )
+    expert_outputs = self.experts(expert_inputs)
+    output = torch.einsum(
+        "besd,bnes->bnd",
+        expert_outputs,
+        routing_instructions["combine_tensor"]
+    )
+    return output
+    """
+    def __init__(self, dim: int, num_experts: int, num_slots: int):
+        super().__init__()
+        self.dim = dim
+        self.num_experts = num_experts
+        self.num_slots = num_slots
+        self.weights = nn.Parameter(torch.randn(dim, num_experts, num_slots))
+
+    def forward(self, x: Tensor) -> dict:
+        router_logits = torch.einsum("bnd,des->bnes", x, self.weights)
+        dispatch_tensor = F.softmax(router_logits, dim=1)
+        combine_tensor = F.softmax(router_logits, dim=(2,3))
+        aux_loss = 0.0
+        return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
+

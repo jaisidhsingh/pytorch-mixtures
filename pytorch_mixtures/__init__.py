@@ -111,8 +111,8 @@ class PyTorchMixturesTests(parameterized.TestCase):
         
         router = ExpertChoiceRouter(dim=D, num_experts=1)
         attn_fn = MHSA(dim=D, num_heads=E)
-        mod, router_z_loss = MoDLayer(router=router, attn_fn=attn_fn, capacity_factor=C)
-        y = mod(x)
+        mod = MoDLayer(router=router, attn_fn=attn_fn, capacity_factor=C)
+        y, router_z_loss = mod(x)
 
         print(" ")
         print("Test details:")
