@@ -1,6 +1,3 @@
-# Reference:
-# 1. Google Flaxformer GitHub: https://github.com/google/flaxformer
-
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -9,7 +6,7 @@ from typing import *
 from pytorch_mixtures.utils import load_balancing_loss, router_z_loss, _one_hot
 
 
-class RouterWeights(nn.Module):
+class SparseRouterWeights(nn.Module):
     def __init__(self, dim: int, num_experts: int) -> None:
         super().__init__()
         self.w_gate = nn.Parameter(torch.randn(dim, num_experts))
@@ -18,10 +15,10 @@ class RouterWeights(nn.Module):
         return torch.einsum("bnd,de->bne", x, self.w_gate)
 
 
-class Router(nn.Module):
+class SparseRouter(nn.Module):
     def __init__(self, dim: int, num_experts: int) -> None:
         super().__init__()
-        self.weights = RouterWeights(dim, num_experts)
+        self.weights = SparseRouterWeights(dim, num_experts)
 
     def forward(self, token_inputs: Tensor, expert_capacity: int) -> dict:
         router_logits = self.weights(token_inputs)
@@ -33,7 +30,7 @@ class Router(nn.Module):
         return routing_instructions
 
 
-class ExpertChoiceRouter(Router):
+class ExpertChoiceRouter(SparseRouter):
     def compute_routing_instructions(self, router_probs: Tensor, expert_capacity: int) -> dict:
         [B, N, E] = router_probs.shape
         # shape = [B, E, N]
@@ -58,7 +55,7 @@ class ExpertChoiceRouter(Router):
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
 
 
-class TopkRouter(Router):
+class TopkRouter(SparseRouter):
     def __init__(self, dim: int, num_experts: int, topk: int) -> None:
         super().__init__(dim, num_experts)
         self.topk = topk
@@ -98,36 +95,34 @@ class TopkRouter(Router):
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
 
 
-class SoftRouter(nn.Module):
-    """
-    MoE for this will have its forward function as:
-    (MoELayer already handles this)
-    -----------------------------------------------
-    routing_instructions = self.router(x)
-    expert_inputs = torch.einsum(
-        "bnd,bnes->besd",
-        x,
-        routing_instructions["dispatch_tensor"]
-    )
-    expert_outputs = self.experts(expert_inputs)
-    output = torch.einsum(
-        "besd,bnes->bnd",
-        expert_outputs,
-        routing_instructions["combine_tensor"]
-    )
-    return output
-    """
-    def __init__(self, dim: int, num_experts: int, num_slots: int):
+class SoftRouterWeights(nn.Module):
+    def __init__(self, dim: int, num_experts: int, seq_len: int) -> None:
         super().__init__()
         self.dim = dim
         self.num_experts = num_experts
-        self.num_slots = num_slots
-        self.weights = nn.Parameter(torch.randn(dim, num_experts, num_slots))
+        self.seq_len = seq_len
+        self.num_slots = seq_len // num_experts 
+        self.w_gate = nn.Parameter(torch.randn(dim, num_experts, self.num_slots))
+    
+    def forward(self, x: Tensor) -> Tensor:
+        return torch.einsum("bnd,des->bnes", x, self.w_gate)
 
-    def forward(self, x: Tensor) -> dict:
-        router_logits = torch.einsum("bnd,des->bnes", x, self.weights)
+
+class SoftRouter(nn.Module):
+    def __init__(self, dim: int, num_experts: int, seq_len: int):
+        super().__init__()
+        self.weights = SoftRouterWeights(dim, num_experts, seq_len)
+
+    def forward(self, token_inputs: Tensor, expert_capacity: int = None) -> dict:
+        # just for consistency
+        expert_capacity = self.weights.num_slots
+        router_logits = self.weights(token_inputs)
+
         dispatch_tensor = F.softmax(router_logits, dim=1)
-        combine_tensor = F.softmax(router_logits, dim=(2,3))
-        aux_loss = 0.0
-        return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss}
+        combine_tensor = F.softmax(F.softmax(router_logits, dim=2), dim=3)
+        
+        aux_loss = torch.tensor(0.0)
+        router_z_loss = torch.tensor(0.0)
+        
+        return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss, "router_z_loss": router_z_loss}
 

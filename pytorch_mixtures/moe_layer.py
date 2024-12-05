@@ -6,12 +6,12 @@ from pytorch_mixtures.utils import Experts
 
 
 class MoELayer(nn.Module):
-    def __init__(self, num_experts: int, router: nn.Module, experts: List[nn.Module], capacity_factor: float) -> None:
+    def __init__(self, router: nn.Module, experts: List[nn.Module], capacity_factor: float) -> None:
         super().__init__()
         self.router = router
-        self.num_experts = num_experts
+        self.experts = Experts(experts)
+        self.num_experts = len(experts)
         self.capacity_factor = capacity_factor
-        self.experts = Experts(num_experts, experts)
     
     def forward(self, token_inputs):
         [B, N, D] = token_inputs.shape

@@ -31,9 +31,9 @@ class GEGLU(nn.Module):
 
 
 class Experts(nn.Module):
-    def __init__(self, num_experts: int, experts: List[nn.Module]) -> None:
+    def __init__(self, experts: List[nn.Module]) -> None:
         super().__init__()
-        self.num_experts = num_experts
+        self.num_experts = len(experts)
         self.experts = nn.ModuleList(experts)
     
     def forward(self, x: Tensor) -> Tensor:

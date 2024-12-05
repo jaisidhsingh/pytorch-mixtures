@@ -1,6 +1,6 @@
 from .moe_layer import MoELayer
 from .mod_layer import MoDLayer
-from .routing import ExpertChoiceRouter, TopkRouter
+from .routing import ExpertChoiceRouter, TopkRouter, SoftRouter
 from .utils import MHSA
 
 import torch
@@ -48,8 +48,8 @@ class PyTorchMixturesTests(parameterized.TestCase):
         
         router = ExpertChoiceRouter(dim=64, num_experts=E)
         # aux_loss is 0 for Expert Choice Routers
-        moe, aux_loss, router_z_loss = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
-        y = moe(x)
+        moe = MoELayer(router=router, experts=many_experts, capacity_factor=C)
+        y, aux_loss, router_z_loss = moe(x)
         z = reference_expert(x)
 
         print(" ")
@@ -83,8 +83,8 @@ class PyTorchMixturesTests(parameterized.TestCase):
             many_experts[i].load_state_dict(reference_expert.state_dict())
         
         router = TopkRouter(dim=64, num_experts=E, topk=K)
-        moe, aux_loss, router_z_loss = MoELayer(num_experts=E, router=router, experts=many_experts, capacity_factor=C)
-        y = moe(x)
+        moe = MoELayer(router=router, experts=many_experts, capacity_factor=C)
+        y, aux_loss, router_z_loss = moe(x)
         z = reference_expert(x)
 
         print(" ")
@@ -100,6 +100,24 @@ class PyTorchMixturesTests(parameterized.TestCase):
         
         report_return = print_report(y, z)
         self.assertEqual(report_return, True)
+
+    @torch.no_grad()
+    def test_soft_moe(self):
+        B, N, D = 1, 128, 64
+        E = 8
+        C = 1
+        x = torch.randn(B, N, D)
+        
+        router = SoftRouter(dim=D, num_experts=E, seq_len=N)
+        experts = [torch.nn.Linear(D, D) for _ in range(E)]
+        moe = MoELayer(router=router, experts=experts, capacity_factor=C)
+        y, aux_loss, router_z_loss = moe(x)
+
+        print(" ")
+        print("Test details:")
+        print("-----------------------------------------------------------------")
+        print("Only checks for an error-free forward pass through the MoE layer with Soft Routing.")
+        print(" ")
 
     @torch.no_grad()
     def test_expert_choice_mod(self):
