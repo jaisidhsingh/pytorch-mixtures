@@ -60,7 +60,6 @@ experts=[nn.Linear(DIM, DIM) for _ in range(NUM_EXPERTS)]
 
 # supply the router and experts to the MoELayer for modularity
 moe = MoELayer(
-    num_experts=NUM_EXPERTS, 
     router=router, 
     experts=experts, 
     capacity_factor=CAPACITY_FACTOR
@@ -88,7 +87,7 @@ class CustomMoEAttentionBlock(nn.Module):
         super().__init__()
         self.attn = MHSA(dim, num_heads)
         router = ExpertChoiceRouter(dim, num_experts)
-        self.moe = MoELayer(dim, router, experts, capacity_factor)
+        self.moe = MoELayer(router, experts, capacity_factor)
         
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
