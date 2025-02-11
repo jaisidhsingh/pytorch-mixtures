@@ -14,7 +14,7 @@ Sources:
 - [x] Mixture of Experts
     - [x] Top-k Routing
     - [x] Expert Choice Routing
-    - [x] Soft MoE Routing 
+    - [x] Soft MoE Routing (used in vision transformers as per the paper)
     - [x] router-z loss
     - [x] load-balancing loss
     - [x] Testing of all MoE protocols - finished
