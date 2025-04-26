@@ -18,6 +18,9 @@ Sources:
     - [x] router-z loss
     - [x] load-balancing loss
     - [x] Testing of all MoE protocols - finished
+	- [ ] MoLE: Mixture of Latent Experts (coming soon!)
+	- [ ] AoE: Autonomy of Experts (coming soon!)
+
 - [x] Mixture of Depths
     - [x] capacity-based routing around attention layer
     - [x] Testing of MoD protocol - finished
