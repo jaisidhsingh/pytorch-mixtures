@@ -110,7 +110,7 @@ class SoftRouterWeights(nn.Module):
 
 
 class SoftRouter(nn.Module):
-    def __init__(self, dim: int, num_experts: int, seq_len: int):
+    def __init__(self, dim: int, num_experts: int, seq_len: int) -> None:
         super().__init__()
         self.weights = SoftRouterWeights(dim, num_experts, seq_len)
 
@@ -127,3 +127,71 @@ class SoftRouter(nn.Module):
         
         return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": aux_loss, "router_z_loss": router_z_loss}
 
+
+class AutonomousRouter(nn.Module):
+    """
+    Autonomous Router is just top-k routing based on the norm of the pre-gate bottleneck activations in the experts. There are no learnable router weights.
+    Reference: https://arxiv.org/pdf/2501.13074
+
+    This should follow the same unit test as TopkRouter, i.e., when all the experts have the same weights, the output of the MoE Layer should be the same as
+    the output of any one expert applied to the input tokens in a dense (non-MoE) feed-forward layer. 
+    """
+    def __init__(self, topk: int) -> None:
+        super().__init__()
+        self.topk = topk
+    
+    def forward(self, token_inputs: Tensor, expert_capacity: int, experts: nn.ModuleList) -> dict:
+        [B, N, D] = token_inputs.shape
+        E = len(experts)
+
+        # shape: [E, dim, bottleneck_dim]
+        stacked_bottlnecks = torch.stack([expert.bottleneck_in.weight.t() for expert in experts], dim=0).to(token_inputs.device)
+        # shape: [dim, E, bottleneck_dim]
+        stacked_bottlnecks = torch.permute(stacked_bottlnecks, (1, 0, 2))
+
+        # shape: [B, N, E, bottleneck_dim]
+        activation_cache = torch.einsum("bnd,dec->bnec", token_inputs, stacked_bottlnecks)
+
+        # shape: [B, N, E]
+        router_logits = activation_cache.norm(dim=-1)
+        assert router_logits.shape == torch.Size([B, N, E]), f"Expected `router_logits` shape [B, N, E], got {router_logits.shape}."
+
+        # values, _ = router_logits.topk(k=self.topk, dim=-1)
+        # router_probs = F.softmax(values, dim=-1)
+        router_probs = F.softmax(router_logits, dim=-1)
+
+        routing_instructions = self.compute_routing_instructions(router_probs, expert_capacity)
+        routing_instructions.update({"router_z_loss": 0.0})
+        return routing_instructions
+
+    def compute_routing_instructions(self, router_probs: Tensor, expert_capacity: int) -> dict:
+        [B, N, E] = router_probs.shape
+        expert_gate, expert_indices = router_probs.topk(k=self.topk, dim=-1)
+
+        # shape: [B, self.topk, N]
+        expert_indices = torch.permute(expert_indices, (0, 2, 1))
+        # shape: [B, self.topk * N]
+        expert_indices = expert_indices.reshape(B, self.topk * N)
+
+        # shape: [B, N * self.topk, E]
+        expert_mask = _one_hot(expert_indices, E).to(torch.int32)
+        # shape: [B, self.topk * N, E]
+        token_priority = torch.cumsum(expert_mask, dim=1) * expert_mask - 1.0
+        # shape: [B, self.topk, N, E]
+        token_priority = token_priority.view(B, self.topk, N, E)
+        # shape: [B, N, self.topk, E]
+        token_priority = torch.permute(token_priority, (0, 2, 1, 3))
+        # shape: [B, N, E]
+        token_priority, _ = torch.max(token_priority, dim=2)
+        token_priority = token_priority.long()
+
+        # make the dispatch and combine tensors
+        # shape: [B, N, E, expert_capacity]
+        dispatch_tensor = _one_hot(token_priority, expert_capacity).float()
+        # shape: [B, N, E, expert_capacity]
+        combine_tensor = torch.einsum(
+            "...te,...tec->...tec",
+            router_probs,
+            dispatch_tensor
+        )
+        return {"dispatch_tensor": dispatch_tensor, "combine_tensor": combine_tensor, "aux_loss": 0.0}

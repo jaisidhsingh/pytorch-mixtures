@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import *
 from pytorch_mixtures.utils import Experts
+from pytorch_mixtures.routing import AutonomousRouter
 
 
 class MoELayer(nn.Module):
@@ -16,8 +17,13 @@ class MoELayer(nn.Module):
     def forward(self, token_inputs):
         [B, N, D] = token_inputs.shape
         expert_capacity = int((N * self.capacity_factor) // self.num_experts)
+        
         # send tokens to router
-        routing_instructions = self.router(token_inputs, expert_capacity)
+        if not isinstance(self.router, AutonomousRouter):
+            routing_instructions = self.router(token_inputs, expert_capacity)
+        else:
+            routing_instructions = self.router(token_inputs, expert_capacity, self.experts.experts)
+        
         # dispatch to experts
         expert_inputs = torch.einsum(
             "bnd,bnec->becd", 
