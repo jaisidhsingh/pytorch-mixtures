@@ -4,3 +4,5 @@ dist/
 .vscode/
 .ropeproject/
 trash/
+tests/
+run_tests.sh
