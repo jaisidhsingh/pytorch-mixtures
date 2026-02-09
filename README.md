@@ -12,18 +12,18 @@ Sources:
 ## Features/Todo
 
 - [x] Mixture of Experts
-    - [x] Top-k Routing
-    - [x] Expert Choice Routing
-    - [x] Soft MoE Routing (used in vision transformers as per the paper)
-    - [x] router-z loss
-    - [x] load-balancing loss
-    - [x] Testing of all MoE protocols - finished
-	- [ ] MoLE: Mixture of Latent Experts (coming soon!)
-	- [ ] AoE: Autonomy of Experts (coming soon!)
+- [x] Top-k Routing
+- [x] Expert Choice Routing
+- [x] Soft MoE Routing (used in vision transformers as per the paper)
+- [x] router-z loss
+- [x] load-balancing loss
+- [x] Testing of all MoE protocols - finished
+- [ ] MoLE: Mixture of Latent Experts (coming soon!)
+- [ ] AoE: Autonomy of Experts (coming soon!)
 
 - [x] Mixture of Depths
-    - [x] capacity-based routing around attention layer
-    - [x] Testing of MoD protocol - finished
+- [x] capacity-based routing around attention layer
+- [x] Testing of MoD protocol - finished
 
 ## Installation
 
@@ -125,6 +125,7 @@ from pytorch_mixtures import run_tests
 
 run_tests()
 ```
+
 Note: All tests pass correctly. If a test fails, it is likely due to an edge case in the random initializations. Try again, and it will pass.
 
 # Citation
