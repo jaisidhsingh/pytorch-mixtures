@@ -1,13 +1,8 @@
 # PyTorch Mixtures <a href="https://pypi.org/project/pytorch-mixtures/">[PyPi]</a>
 
-A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of-Experts</a> and <a href="https://arxiv.org/abs/2404.02258">Mixture-of-Depths</a> in PyTorch. Your one-stop solution for inserting MoE/MoD layers into custom neural networks effortlessly!
+A plug-and-play module for <a href="https://arxiv.org/abs/2202.08906">Mixture-of-Experts</a> and in PyTorch. Your one-stop solution for inserting MoE layers into custom neural networks effortlessly!
 
-<img src="assets/moe_pic.png" width="350" height="200"> -- <img src="assets/mod_pic.png" width="150" height="200">
-
-Sources:
-
-1. <a href="https://arxiv.org/abs/1701.06538">Sparse Mixture of Experts, 2017</a>
-2. <a href="https://arxiv.org/abs/2404.02258">Mixture of Depths, 2024</a>
+<img src="assets/moe_pic.png" width="350" height="200">
 
 ## Features/Todo
 
@@ -20,10 +15,6 @@ Sources:
 - [x] Testing of all MoE protocols - finished
 - [ ] MoLE: Mixture of Latent Experts (coming soon!)
 - [ ] AoE: Autonomy of Experts (coming soon!)
-
-- [x] Mixture of Depths
-- [x] capacity-based routing around attention layer
-- [x] Testing of MoD protocol - finished
 
 ## Installation
 
