@@ -3,6 +3,5 @@ build/
 dist/
 .vscode/
 .ropeproject/
-trash/
-tests/
-run_tests.sh
+.ruff_cache/
+.pytest_cache

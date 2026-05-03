@@ -14,18 +14,28 @@ class MoE(ABC, nn.Module):
         super().__init__()
         self.cfg = config
         self.weight = nn.Parameter(torch.empty(config.hidden_dim, config.num_experts))
-        self.experts = nn.ModuleList([
-            EXPERT_REGISTRY[config.expert_fn](config) for _ in range(config.num_experts)
-        ])
-    
-    @abstractmethod 
+        nn.init.xavier_uniform_(self.weight)
+        self.experts = nn.ModuleList(
+            [
+                EXPERT_REGISTRY[config.expert_fn](config)
+                for _ in range(config.num_experts)
+            ]
+        )
+
+    @abstractmethod
     def compute_routing(self, router_logits: torch.Tensor) -> tp.Tuple[torch.Tensor]:
-        raise NotImplementedError("Must be implemented specific to one's desired routing scheme.")
-    
-    @abstractmethod 
-    def apply_routing_on_experts(self, x: torch.Tensor, weights: torch.Tensor, selected: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("Must be implemented specific to one's desired routing scheme.")
-    
+        raise NotImplementedError(
+            "Must be implemented specific to one's desired routing scheme."
+        )
+
+    @abstractmethod
+    def apply_routing_on_experts(
+        self, x: torch.Tensor, weights: torch.Tensor, selected: torch.Tensor
+    ) -> torch.Tensor:
+        raise NotImplementedError(
+            "Must be implemented specific to one's desired routing scheme."
+        )
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, L, D = x.shape
         x = x.reshape(-1, D)

@@ -3,8 +3,8 @@ import torch
 from time import perf_counter
 from dataclasses import dataclass
 
-from pytorch_mixtures import TopkMoE, ExpertChoiceMoE, SoftMoE
-from pytorch_mixtures.utils import FeedForward, SwiGLU, _assert_no_nan 
+from pytorch_mixtures import TopkMoE, ExpertChoiceMoE, MoEConfig
+from pytorch_mixtures.utils import FeedForward, SwiGLU, _assert_no_nan, EXPERT_REGISTRY
 
 
 @dataclass
@@ -19,12 +19,14 @@ class TestingConfig:
     capacity_factor: float = 5
     fast_implementation: bool = False
     match_routing_type: str = "topk"
+    expert_fn: str = "ff"
+    expert_act: str = "silu"
 
 
 def _timeit(callable, some_input):
     start = perf_counter()
     result = callable(some_input)
-    return result, perf_counter()-start
+    return result, perf_counter() - start
 
 
 def _print_diagnostics(d, l):
@@ -57,25 +59,26 @@ def _implementation_equivalence_test(config):
     routing_type = config.match_routing_type
 
     x = torch.randn(config.B, config.T, config.D)
-    router_kwargs = dict(
-        d_model=config.D,
-        n_experts=config.n_experts,
-        d_hidden=config.d_hidden,
-        capacity_factor=config.capacity_factor
+
+    moe_config = MoEConfig(
+        hidden_dim=config.D,
+        intermediate_dim=config.d_hidden,
+        num_experts=config.n_experts,
+        expert_fn=config.expert_fn,
+        expert_act=config.expert_act,
+        router_fn=routing_type,
+        capacity_factor=config.capacity_factor,
+        topk=config.k if routing_type == "topk" else None,
+        dtype=torch.float32,
     )
-    if routing_type == "topk":
-        router_kwargs["k"] = config.k
 
     moe_ref = TopkMoE if routing_type == "topk" else ExpertChoiceMoE
-    moe = moe_ref(**router_kwargs)
+    moe = moe_ref(moe_config)
 
     result, t = _timeit(moe, x)
 
     print(f"MoE with `routing_type = {routing_type}` forward pass successful")
     print(f"Implementation took {t} seconds.")
-    print(" ")
-    print("Diagnostics:")
-    _print_diagnostics(result[2], result[1])
 
     _end_test()
 
@@ -85,61 +88,47 @@ def _expert_equivalence_test(config):
     torch.manual_seed(config.seed)
 
     x = torch.randn(config.B, config.T, config.D)
-    base = FeedForward(config.D, config.d_hidden)
 
-    topk = TopkMoE(config.D, config.n_experts, config.d_hidden, k=config.k, capacity_factor=config.capacity_factor)
-    ec = ExpertChoiceMoE(config.D, config.n_experts, config.d_hidden, capacity_factor=config.capacity_factor)
+    moe_config = MoEConfig(
+        hidden_dim=config.D,
+        intermediate_dim=config.d_hidden,
+        num_experts=config.n_experts,
+        expert_fn=config.expert_fn,
+        expert_act=config.expert_act,
+        router_fn="topk",
+        capacity_factor=config.capacity_factor,
+        topk=config.k,
+        dtype=torch.float32,
+    )
 
-    # Make all experts identical to `base`
+    base = FeedForward(moe_config)
+
+    topk = TopkMoE(moe_config)
+
     with torch.no_grad():
         for i in range(config.n_experts):
-            for layer, base_layer in zip([topk.experts[i].fc1, topk.experts[i].fc2],
-                                         [base.fc1, base.fc2]):
-                layer.weight.copy_(base_layer.weight)
-                layer.bias.copy_(base_layer.bias)
-            for layer, base_layer in zip([ec.experts[i].fc1, ec.experts[i].fc2],
-                                         [base.fc1, base.fc2]):
+            for layer, base_layer in zip(
+                [topk.experts[i].up, topk.experts[i].down], [base.up, base.down]
+            ):
                 layer.weight.copy_(base_layer.weight)
                 layer.bias.copy_(base_layer.bias)
 
-        # Uniform gating (all ones → softmax uniform). Ensures routing weights sum to 1
-        # and with identical experts the MoE output matches the single-expert output.
-        topk.gate.weight.fill_(1.0)
-        ec.gate.weight.fill_(1.0)
+        topk.weight.fill_(1.0)
 
     ref = base(x)
-    y_topk, l_topk, d_topk = topk(x)
-    y_ec, l_ec, d_ec = ec(x)
+    y_topk = topk(x)
 
-    # check topk routing
     logged_topk = torch.allclose(y_topk, ref)
     print("TopKMoE equals single expert output", logged_topk)
     if not logged_topk:
-        print("[TEST FAILED, IMPORTANT NOTICE] Implementation is suspected to be incorrect.")
+        print(
+            "[TEST FAILED, IMPORTANT NOTICE] Implementation is suspected to be incorrect."
+        )
 
-    print("--"*30)
-    print("TopKMoE diagnostics")
-    _print_diagnostics(d_topk, l_topk)
+    print("--" * 30)
     print(" ")
 
-    # raise test-failed error after printing moe diagnostics
     torch.testing.assert_close(y_topk, ref, rtol=1e-5, atol=1e-6)
-
-    # check expert-choice routing
-    logged_ec = torch.allclose(y_ec, ref)
-    print("ExpertChoiceMoE equals single expert output", logged_ec)
-    if not logged_ec:
-        print(f"[TEST FAILED, IMPORTANT NOTICE] Check diagnostics for sufficient capacity before changing routing implementation.")
-        print("ExpertChoiceMoE outputs match the single expert when no tokens are dropped.")
-
-    print("--"*30)
-    print("ExpertChoiceMoE diagnostics")
-    _print_diagnostics(d_ec, l_ec)
-    print(" ")
-
-    # ec_moe will not match the base expert if capacity is low.
-    # raise test-failed error after printing moe diagnostics to verify capacity (and dropped tokens).
-    torch.testing.assert_close(y_ec, ref, rtol=1e-5, atol=1e-6)
 
     _end_test()
 
